@@ -16,13 +16,15 @@ DESCRIPTION
                                     │   │   ├── *fodf*.nii.gz
                                     │   │   ├── *map_exclude*.nii.gz
                                     │   │   ├── *map_include*.nii.gz
-                                    │   │   └── *mask_wm*.nii.gz
+                                    │   │   ├── *exclusion_mask*.nii.gz
+                                    │   │   └── *tracking_mask*.nii.gz
                                     │   ├── A2
                                     │   │   ├── *fa*.nii.gz
                                     │   │   ├── *fodf*.nii.gz
                                     │   │   ├── *map_exclude*.nii.gz
                                     │   │   ├── *map_include*.nii.gz
-                                    │   │   └── *mask_wm*.nii.gz
+                                    │   │   ├── *exclusion_mask*.nii.gz
+                                    │   │   └── *tracking_mask*.nii.gz
                                     └── S2
                                         ├── A1
                                         │   └── *.nii.gz
