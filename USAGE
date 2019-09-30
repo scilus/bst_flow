@@ -12,19 +12,21 @@ DESCRIPTION
                                     [root]
                                     ├── S1
                                     │   ├── A1
-                                    │   │   ├── *fa*.nii.gz
-                                    │   │   ├── *fodf*.nii.gz
-                                    │   │   ├── *map_exclude*.nii.gz
-                                    │   │   ├── *map_include*.nii.gz
-                                    │   │   ├── *exclusion_mask*.nii.gz
-                                    │   │   └── *tracking_mask*.nii.gz
+                                    │   │   ├── *fa.nii.gz
+                                    │   │   ├── *fodf.nii.gz
+                                    │   │   ├── *map_exclude.nii.gz
+                                    │   │   ├── *map_include.nii.gz
+                                    │   │   ├── *tracking_mask.nii.gz
+                                    │   │   ├── *inclusion_mask.nii.gz (optional)
+                                    │   │   └── *exclusion_mask.nii.gz (optional)
                                     │   ├── A2
                                     │   │   ├── *fa*.nii.gz
                                     │   │   ├── *fodf*.nii.gz
                                     │   │   ├── *map_exclude*.nii.gz
                                     │   │   ├── *map_include*.nii.gz
-                                    │   │   ├── *exclusion_mask*.nii.gz
-                                    │   │   └── *tracking_mask*.nii.gz
+                                    │   │   ├── *tracking_mask.nii.gz
+                                    │   │   ├── *inclusion_mask.nii.gz (optional)
+                                    │   │   └── *exclusion_mask.nii.gz (optional)
                                     └── S2
                                         ├── A1
                                         │   └── *.nii.gz

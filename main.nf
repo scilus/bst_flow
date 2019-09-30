@@ -90,22 +90,23 @@ if (params.root)
     root = file(params.root)
     /* Watch out, files are ordered alphabetically in channel */
         in_data = Channel
-            .fromFilePairs("$root/**/{*fa*.nii.gz,*fodf*.nii.gz,*tracking_mask*.nii.gz}",
+            .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
                            size: 3,
                            maxDepth:2,
                            flat: true) {it.parent.name}
 
         map_pft = Channel
-            .fromFilePairs("$root/**/{*map_exclude*.nii.gz,*map_include*.nii.gz}",
+            .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
                            size: 2,
                            maxDepth:2,
                            flat: true) {it.parent.name}
 
-        exclusion_data = Channel
-            .fromFilePairs("$root/**/{*exclusion_mask*.nii.gz}",
-                           size: 1,
-                           maxDepth:2,
-                           flat: true) {it.parent.name}
+        masks_for_exclusion = Channel.fromPath("$root/**/*exclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
+        masks_for_inclusion = Channel.fromPath("$root/**/*inclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
+
+        atlas_anat = Channel.fromPath("$params.atlas_directory/*.nii.gz")
+        atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
+        algo_list = params.algo?.tokenize(',')
 }
 
 (anat_for_registration, anat_for_deformation, fod_and_mask_for_priors) = in_data
@@ -121,32 +122,26 @@ if (params.root)
         tuple(sid, map_exclude)]}
     .separate(2)
 
-(masks_for_exclusion) = exclusion_data
-    .map{sid, mask -> 
-        [tuple(sid, mask)]}
-    .separate(1)
-
-atlas_directory = file(params.atlas_directory)
-atlas_bundles = params.atlas_bundles_basename?.tokenize(',')
-algo_list = params.algo?.tokenize(',')
-
 workflow.onComplete {
     log.info "Pipeline completed at: $workflow.complete"
     log.info "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
     log.info "Execution duration: $workflow.duration"
 }
 
+anat_for_registration
+    .combine(atlas_anat)
+    .set{anats_for_registration}
 process Register_Anat {
     cpus params.register_processes
     input:
-    set sid, file(native_anat) from anat_for_registration
+    set sid, file(native_anat), file(atlas) from anats_for_registration
 
     output:
     set sid, "${sid}__output1InverseWarp.nii.gz", "${sid}__output0GenericAffine.mat" into deformation_for_warping
     file "${sid}__outputWarped.nii.gz"
     script:
     """
-    antsRegistrationSyNQuick.sh -d 3 -f ${native_anat} -m ${params.atlas_anat} -n ${params.register_processes} -o ${sid}__output
+    antsRegistrationSyNQuick.sh -d 3 -f ${native_anat} -m ${atlas} -n ${params.register_processes} -o ${sid}__output
     """ 
 }
 
@@ -158,18 +153,18 @@ process Warp_Bundle {
     cpus 2
     input:
     set sid, file(anat), file(warp), file(affine) from anat_deformation_for_warp
-    each bundle_name from atlas_bundles
+    each file(bundle_name) from atlas_bundles
 
     output:
-    set sid, val(bundle_name), "${sid}__${bundle_name}_warp.trk" into bundles_for_priors, models_for_recobundle
+    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors, models_for_recobundle
     script:
     """
     ConvertTransformFile 3 ${affine} ${affine}.txt --hm --ras
-    scil_apply_transform_to_tractogram.py ${params.atlas_directory}/${bundle_name}.trk ${warp} ${affine}.txt ${bundle_name}_linear.trk --inverse -f
-    scil_apply_warp_to_tractogram.py ${bundle_name}_linear.trk ${anat} ${warp} ${bundle_name}_warp.trk -f
-    scil_remove_invalid_streamlines.py ${bundle_name}_warp.trk ${bundle_name}_ic.trk
+    scil_apply_transform_to_tractogram.py ${bundle_name} ${warp} ${affine}.txt ${bundle_name.baseName}_linear.trk --inverse -f
+    scil_apply_warp_to_tractogram.py ${bundle_name.baseName}_linear.trk ${anat} ${warp} ${bundle_name.baseName}_warp.trk -f
+    scil_remove_invalid_streamlines.py ${bundle_name.baseName}_warp.trk ${bundle_name.baseName}_ic.trk
 
-    mv ${bundle_name}_ic.trk "${sid}__${bundle_name}_warp.trk"
+    mv ${bundle_name.baseName}_ic.trk "${sid}__${bundle_name.baseName}_warp.trk"
     """ 
 }
 
@@ -177,6 +172,7 @@ process Warp_Bundle {
 fod_and_mask_for_priors
     .combine(bundles_for_priors, by: 0)
     .set{fod_mask_bundles_for_priors}
+
 process Generate_Priors {
     cpus 2
     errorStrategy 'ignore'
@@ -210,7 +206,7 @@ process Generate_Priors {
 }
 
 process Seeding_Mask {
-    cpus 1
+    cpus 2
     input:
     set sid, val(bundle_name), file(tracking_mask), file(endpoints_mask) from masks_for_seeding
 
@@ -229,7 +225,7 @@ process Seeding_Mask {
 }
 
 process Tracking_Mask {
-    cpus 1
+    cpus 2
     input:
     set sid, val(bundle_name), file(tracking_mask), file(bs_mask) from masks_for_tracking
 
@@ -286,7 +282,7 @@ map_in_for_tracking
     .combine(masks_for_map_in, by: 0)
     .set{masks_map_in_for_bs}
 process Generate_Map_Include {
-    cpus 1
+    cpus 2
     input:
     set sid, file(map_include), val(bundle_name), file(endpoints_mask) from masks_map_in_for_bs
 
@@ -312,7 +308,7 @@ map_ex_for_tracking
     .combine(masks_for_map_ex, by: 0)
     .set{masks_map_ex_for_bs}
 process Generate_Map_Exclude {
-    cpus 1
+    cpus 2
     input:
     set sid, file(map_exclude), val(bundle_name), file(tracking_mask) from masks_map_ex_for_bs
 
@@ -324,10 +320,10 @@ process Generate_Map_Exclude {
     script:
     if (params.use_bs_tracking_mask)
         """
-        mrthreshold ${tracking_mask} inverted_mask.nii.gz
+        mrthreshold ${tracking_mask} inverted_mask.nii.gz -invert
         
         mrcalc ${map_exclude} inverted_mask.nii.gz \
-            -mult ${sid}__${bundle_name}_map_exclude.nii.gz
+            -add ${sid}__${bundle_name}_map_exclude.nii.gz
         """
     else
         """
@@ -366,31 +362,78 @@ process PFT_Tracking {
 
 local_bundles_for_exclusion
     .concat(pft_bundles_for_exclusion)
-    .set{bundles_for_masking}
-bundles_for_masking
-    .combine(masks_for_exclusion, by: 0)
-    .set{bundles_masks_for_masking}
-process Mask_Exclusion{
-    cpus 1
-    publishDir = {"./results_bst/$sid/$task.process/${bundle_name}"}
-    input:
-    set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(mask) from \
-        bundles_masks_for_masking
+    .set{bundles_for_exclusion}
 
-    output:
-    set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_masked.trk" into bundles_for_recobundle
-    script:
-    """
-    scil_filter_tractogram.py ${bundle} ${sid}__${bundle_name}_${algo}_${tracking_source}_masked.trk --drawn_roi ${mask} any exclude
-    """
+masks_for_exclusion
+    .into{masks_for_exclusion_process; masks_for_exclusion_count}
+masks_for_exclusion_count
+    .count()
+    .subscribe { tmp = it}
+if(tmp == 0)
+{
+    bundles_for_exclusion
+        .set{bundles_for_inclusion}
 }
+else
+{
+    bundles_for_exclusion
+        .combine(masks_for_exclusion_process, by: 0)
+        .set{bundles_masks_for_exclusion}
+    process Mask_Exclusion{
+        cpus 2
+        publishDir = {"./results_bst/$sid/$task.process/"}
+        input:
+        set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(mask) from \
+            bundles_masks_for_exclusion
+        
+
+        output:
+        set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_masked_ex.trk" into bundles_for_inclusion
+        script:
+        """
+        scil_filter_tractogram.py ${bundle} ${sid}__${bundle_name}_${algo}_${tracking_source}_masked_ex.trk --drawn_roi ${mask} any exclude
+        """
+    }
+}
+
+masks_for_inclusion
+    .into{masks_for_inclusion_process; masks_for_inclusion_count}
+masks_for_inclusion_count
+    .count()
+    .subscribe { tmp = it}
+if(tmp == 0)
+{
+    bundles_for_inclusion
+        .set{bundles_for_recobundle}
+}
+else
+{
+    bundles_for_inclusion
+        .combine(masks_for_inclusion_process, by: 0)
+        .set{bundles_masks_for_inclusion}
+    process Mask_Inclusion{
+        cpus 2
+        publishDir = {"./results_bst/$sid/$task.process/"}
+        input:
+        set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(mask) from \
+            bundles_masks_for_inclusion
+
+        output:
+        set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_masked_in.trk" into bundles_for_recobundle
+        script:
+        """
+        scil_filter_tractogram.py ${bundle} ${sid}__${bundle_name}_${algo}_${tracking_source}_masked_in.trk --drawn_roi ${mask} any include
+        """
+    }
+}
+
 
 bundles_for_recobundle
     .combine(models_for_recobundle, by: [0,1])
     .set{bundles_models_for_recobundle}
 process Recobundle_Segmentation {
-    cpus 1
-    publishDir = {"./results_bst/$sid/$task.process/${bundle_name}"}
+    cpus 2
+    publishDir = {"./results_bst/$sid/$task.process/"}
     input:
     set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(model) from \
         bundles_models_for_recobundle
@@ -411,8 +454,8 @@ process Recobundle_Segmentation {
 }
 
 process Outliers_Removal {
-    cpus 1
-    publishDir = {"./results_bst/$sid/$task.process/${bundle_name}"}
+    cpus 2
+    publishDir = {"./results_bst/$sid/$task.process/"}
     errorStrategy 'ignore'
     input:
     set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle) from \
@@ -424,8 +467,9 @@ process Outliers_Removal {
     params.recobundle
     script:
     """
-    scil_outlier_rejection.py ${bundle} \
+    scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
+    scil_outlier_rejection.py no_loops.trk  \
         ${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk \
-        outliers.trk --alpha $params.outlier_alpha
+        --alpha $params.outlier_alpha
     """
 }
