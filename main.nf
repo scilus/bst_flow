@@ -4,9 +4,7 @@ if(params.help) {
     usage = file("$baseDir/USAGE")
 
     cpu_count = Runtime.runtime.availableProcessors()
-    bindings = ["atlas_anat":"$params.atlas_anat",
-                "atlas_directory":"$params.atlas_directory",
-                "atlas_bundles_basename":"$params.atlas_bundles_basename",
+    bindings = ["atlas_directory":"$params.atlas_directory",
                 "use_orientational_priors":"$params.use_orientational_priors",
                 "use_bs_tracking_mask":"$params.use_bs_tracking_mask",
                 "bs_tracking_mask_dilation":"$params.bs_tracking_mask_dilation",
@@ -53,9 +51,7 @@ log.info "Options"
 log.info "======="
 log.info ""
 log.info "[Atlas]"
-log.info "Atlas anatomy: $params.atlas_anat"
 log.info "Atlas directory: $params.atlas_directory"
-log.info "Atlas bundles: $params.atlas_bundles_basename"
 log.info ""
 log.info "[Priors options]"
 log.info "BS Tracking Mask: $params.use_bs_tracking_mask"
@@ -195,12 +191,12 @@ process Generate_Priors {
         --sh_basis $params.basis --output_prefix ${sid}__${bundle_name}_
     maskfilter ${sid}__${bundle_name}_todi_mask.nii.gz \
         dilate dilate_todi.nii.gz -npass $params.bs_tracking_mask_dilation
-    scil_mask_math.py intersection ${mask} dilate_todi.nii.gz \
+    mrcalc ${mask} dilate_todi.nii.gz -mult \
         ${sid}__${bundle_name}_todi_mask_dilate.nii.gz
 
     maskfilter ${sid}__${bundle_name}_endpoints_mask.nii.gz \
         dilate dilate_endpoints.nii.gz -npass $params.bs_endpoints_mask_dilation
-    scil_mask_math.py intersection ${mask} dilate_endpoints.nii.gz \
+    mrcalc ${mask} dilate_endpoints.nii.gz -mult \
         ${sid}__${bundle_name}_endpoints_mask_dilate.nii.gz
     """
 }
@@ -220,7 +216,8 @@ process Seeding_Mask {
         """
     else
         """
-        mv ${endpoints_mask} ${sid}__${bundle_name}_seeding_mask.nii.gz
+        mrcalc ${tracking_mask} ${endpoints_mask} -mult \
+            ${sid}__${bundle_name}_seeding_mask.nii.gz
         """
 }
 
@@ -364,11 +361,12 @@ local_bundles_for_exclusion
     .concat(pft_bundles_for_exclusion)
     .set{bundles_for_exclusion}
 
+tmp = 0
 masks_for_exclusion
     .into{masks_for_exclusion_process; masks_for_exclusion_count}
 masks_for_exclusion_count
     .count()
-    .subscribe { tmp = it}
+    .subscribe{ tmp = it }
 if(tmp == 0)
 {
     bundles_for_exclusion
@@ -396,11 +394,12 @@ else
     }
 }
 
+tmp = 0
 masks_for_inclusion
     .into{masks_for_inclusion_process; masks_for_inclusion_count}
 masks_for_inclusion_count
     .count()
-    .subscribe { tmp = it}
+    .subscribe{ tmp = it }
 if(tmp == 0)
 {
     bundles_for_inclusion
