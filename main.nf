@@ -51,7 +51,8 @@ log.info "Options"
 log.info "======="
 log.info ""
 log.info "[Atlas]"
-log.info "Atlas directory: $params.atlas_directory"
+log.info "Atlas Anatomy: $params.atlas_anat"
+log.info "Atlas Directory: $params.atlas_directory"
 log.info ""
 log.info "[Priors options]"
 log.info "BS Tracking Mask: $params.use_bs_tracking_mask"
@@ -64,12 +65,12 @@ log.info "[Tracking options]"
 log.info "Local Tracking: $params.local_tracking"
 log.info "PFT Tracking: $params.pft_tracking"
 log.info "Algo: $params.algo"
-log.info "Seeding type: $params.seeding"
-log.info "Number of seeds: $params.nbr_seeds"
-log.info "Random seed: $params.tracking_seed"
-log.info "Minimum length: $params.min_length"
-log.info "Maximum length: $params.max_length"
-log.info "Compressing threshold: $params.compress_error_tolerance"
+log.info "Seeding Type: $params.seeding"
+log.info "Number of Seeds: $params.nbr_seeds"
+log.info "Random Seed: $params.tracking_seed"
+log.info "Minimum Length: $params.min_length"
+log.info "Maximum Length: $params.max_length"
+log.info "Compressing Threshold: $params.compress_error_tolerance"
 log.info ""
 log.info "[Recobundles options]"
 log.info "Segmentation with Recobundle: $params.recobundle"
@@ -100,7 +101,7 @@ if (params.root)
         masks_for_exclusion = Channel.fromPath("$root/**/*exclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
         masks_for_inclusion = Channel.fromPath("$root/**/*inclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
 
-        atlas_anat = Channel.fromPath("$params.atlas_directory/*.nii.gz")
+        atlas_anat = Channel.fromPath("$params.atlas_anat")
         atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
         algo_list = params.algo?.tokenize(',')
 }
@@ -446,7 +447,7 @@ process Recobundle_Segmentation {
     printf "1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1" >> identity.txt
     scil_recognize_single_bundle.py ${bundle} ${model} identity.txt \
         ${sid}__${bundle_name}_${algo}_${tracking_source}_segmented.trk \
-        --wb_clustering_thr $params.wb_clustering_thr \
+        --tractogram_clustering_thr $params.wb_clustering_thr \
         --model_clustering_thr $params.model_clustering_thr \
         --slr_threads 1 --pruning_thr $params.prunning_thr
     """

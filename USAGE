@@ -11,35 +11,23 @@ DESCRIPTION
 
                                     [root]
                                     ├── S1
-                                    │   ├── A1
-                                    │   │   ├── *fa.nii.gz
-                                    │   │   ├── *fodf.nii.gz
-                                    │   │   ├── *map_exclude.nii.gz
-                                    │   │   ├── *map_include.nii.gz
-                                    │   │   ├── *tracking_mask.nii.gz
-                                    │   │   ├── *inclusion_mask.nii.gz (optional)
-                                    │   │   └── *exclusion_mask.nii.gz (optional)
-                                    │   ├── A2
-                                    │   │   ├── *fa*.nii.gz
-                                    │   │   ├── *fodf*.nii.gz
-                                    │   │   ├── *map_exclude*.nii.gz
-                                    │   │   ├── *map_include*.nii.gz
-                                    │   │   ├── *tracking_mask.nii.gz
-                                    │   │   ├── *inclusion_mask.nii.gz (optional)
-                                    │   │   └── *exclusion_mask.nii.gz (optional)
+                                    │   ├── *fa.nii.gz
+                                    │   ├── *fodf.nii.gz
+                                    │   ├── *map_exclude.nii.gz (optional, pft)
+                                    │   ├── *map_include.nii.gz (optional, pft)
+                                    │   ├── *tracking_mask.nii.gz
+                                    │   ├── *inclusion_mask.nii.gz (optional)
+                                    │   └── *exclusion_mask.nii.gz (optional)
                                     └── S2
-                                        ├── A1
-                                        │   └── *.nii.gz
-                                        └── A2
-                                            └── *.nii.gz
+                                        └── *.nii.gz
+
+--atlas_anat                        Reference image of the atlas
+--atlas_directory                   Path of the folder containing all the trk
+                                    to be used by the pipeline
 
 NOTES
 
 OPTIONAL ARGUMENTS (current value)
---atlas_anat = "PATH_TO_IMAGE"
---atlas_directory = "PATH_TO_DIRECTORY"
---atlas_bundles_basename = "BUNDLE_1,BUNDLE_2"
-
 --use_orientational_priors              Compute and use the orientation priors ($use_orientational_priors)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
 --bs_tracking_mask_dilation             Dilate the tracking mask by a factor (bs_endpoints_mask_dilation)
