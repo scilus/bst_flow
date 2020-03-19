@@ -34,7 +34,7 @@ if(params.help) {
 }
 
 log.info "SCIL bundle specific pipeline"
-log.info "=============================="
+log.info "============================="
 log.info ""
 log.info "Start time: $workflow.start"
 log.info ""
@@ -81,30 +81,27 @@ log.info "Outlier Removal Alpha: $params.outlier_alpha"
 log.info ""
 log.info ""
 
-if (params.root)
-{
-    log.info "Input: $params.root"
-    root = file(params.root)
-    /* Watch out, files are ordered alphabetically in channel */
-        in_data = Channel
-            .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
-                           size: 3,
-                           maxDepth:2,
-                           flat: true) {it.parent.name}
+log.info "Input: $params.root"
+root = file(params.root)
+/* Watch out, files are ordered alphabetically in channel */
+    in_data = Channel
+        .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
+                        size: 3,
+                        maxDepth:2,
+                        flat: true) {it.parent.name}
 
-        map_pft = Channel
-            .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
-                           size: 2,
-                           maxDepth:2,
-                           flat: true) {it.parent.name}
+    map_pft = Channel
+        .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
+                        size: 2,
+                        maxDepth:2,
+                        flat: true) {it.parent.name}
 
-        masks_for_exclusion = Channel.fromPath("$root/**/*exclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
-        masks_for_inclusion = Channel.fromPath("$root/**/*inclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
+    masks_for_exclusion = Channel.fromPath("$root/**/*exclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
+    masks_for_inclusion = Channel.fromPath("$root/**/*inclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
 
-        atlas_anat = Channel.fromPath("$params.atlas_anat")
-        atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
-        algo_list = params.algo?.tokenize(',')
-}
+    atlas_anat = Channel.fromPath("$params.atlas_anat")
+    atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
+    algo_list = params.algo?.tokenize(',')
 
 (anat_for_registration, anat_for_deformation, fod_and_mask_for_priors) = in_data
     .map{sid, anat, fodf, tracking_mask -> 

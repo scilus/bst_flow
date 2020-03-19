@@ -1,5 +1,5 @@
 Pipeline for bundle-specific tractography
-================================
+=========================================
 
 USAGE
 
@@ -30,17 +30,18 @@ NOTES
 OPTIONAL ARGUMENTS (current value)
 --use_orientational_priors              Compute and use the orientation priors ($use_orientational_priors)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
---bs_tracking_mask_dilation             Dilate the tracking mask by a factor (bs_endpoints_mask_dilation)
+--bs_tracking_mask_dilation             Dilate the tracking mask by a factor ($bs_endpoints_mask_dilation)
+
 --use_bs_endpoints_mask                 Use the bundle-specific mask for termination ($use_bs_endpoints_mask)
 --bs_endpoints_mask_dilation            Dilate the endpoint mask by a factor ($bs_endpoints_mask_dilation)
---use_tracking_mask_as_seeding          Tractography will be initialized in the tracking mask ($use_tracking_mask_as_seeding)
+--use_tracking_mask_as_seeding          Tractography will be initialized in the tracking mask rather than endpoints ($use_tracking_mask_as_seeding)
 
 --local_tracking                        Perform local tractography ($local_tracking)
 --pft_tracking                          Perform particle filtering tractography ($pft_tracking)
 
 --seeding                               Seeding strategy, either npv or nts ($seeding)
 --nbr_seeds                             Number of seeds to initialize, per voxel or total ($nbr_seeds)
---algo                                  Choice between prob, det or both ($algo)
+--algo                                  Choice between "prob", "det" or "prob,det" ($algo)
 --basis                                 SH basis of the input FOD ($basis)
 --min_length                            Minimal length in mm of streamline ($min_length)
 --max_length                            Maximal length in mm of streamline ($max_length)
