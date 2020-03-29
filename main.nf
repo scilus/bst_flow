@@ -136,6 +136,8 @@ process Register_Anat {
     script:
     """
     antsRegistrationSyNQuick.sh -d 3 -f ${native_anat} -m ${atlas} -n ${params.register_processes} -o ${sid}__output
+    mrconvert "${sid}__outputWarped.nii.gz" "${sid}__outputWarped.nii.gz" -force
+    mrconvert "${sid}__output1InverseWarp.nii.gz" "${sid}__output1InverseWarp.nii.gz" -force
     """ 
 }
 
