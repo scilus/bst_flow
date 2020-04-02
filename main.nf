@@ -156,11 +156,8 @@ process Warp_Bundle {
     script:
     """
     ConvertTransformFile 3 ${affine} ${affine}.txt --hm --ras
-    scil_apply_transform_to_tractogram.py ${bundle_name} ${warp} ${affine}.txt ${bundle_name.baseName}_linear.trk --inverse -f
-    scil_apply_warp_to_tractogram.py ${bundle_name.baseName}_linear.trk ${anat} ${warp} ${bundle_name.baseName}_warp.trk -f
-    scil_remove_invalid_streamlines.py ${bundle_name.baseName}_warp.trk ${bundle_name.baseName}_ic.trk
-
-    mv ${bundle_name.baseName}_ic.trk "${sid}__${bundle_name.baseName}_warp.trk"
+    scil_apply_transform_to_tractogram.py ${bundle_name} ${warp} ${affine}.txt ${bundle_name.baseName}_linear.trk --inverse --remove_invalid -f
+    scil_apply_warp_to_tractogram.py ${bundle_name.baseName}_linear.trk ${anat} ${warp} ${sid}__${bundle_name.baseName}_warp.trk --remove_invalid -f
     """ 
 }
 
