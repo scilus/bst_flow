@@ -269,6 +269,7 @@ process Local_Tracking {
         --sh_basis $params.basis --min_len $params.min_length --max_len $params.max_length \
         --$params.seeding $params.nbr_seeds --compress $params.compress_error_tolerance \
         --seed $params.tracking_seed --algo ${algo}
+    scil_remove_invalid_streamlines.py ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk  ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk -f
     """
 }
 
@@ -351,6 +352,7 @@ process PFT_Tracking {
         --algo $algo --sh_basis $params.basis --min_length $params.min_length \
         --max_length $params.max_length --$seeding $params.nbr_seeds \
         --compress $params.compress_error_tolerance --seed $params.tracking_seed
+    scil_remove_invalid_streamlines.py ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk  ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk -f
     """
 }
 
