@@ -30,7 +30,7 @@ OPTIONAL ARGUMENTS (current value)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
 --bs_tracking_mask_dilation             Dilate the tracking mask by a factor ($bs_endpoints_mask_dilation)
 
---use_bs_endpoints_mask                 Use the bundle-specific mask for termination, PFT only ($use_bs_endpoints_mask)
+--use_bs_endpoints_include                 Use the bundle-specific mask for termination, PFT only ($use_bs_endpoints_include)
 --bs_endpoints_mask_dilation            Dilate the endpoint mask by a factor ($bs_endpoints_mask_dilation)
 --use_tracking_mask_as_seeding          Tractography will be initialized in the tracking mask rather than endpoints ($use_tracking_mask_as_seeding)
 
@@ -48,8 +48,6 @@ OPTIONAL ARGUMENTS (current value)
 
 --recobundles                            Clean up tractography using model shape ($recobundles)
 --outlier_alpha                         Remove spurious streamlines based on shape ($outlier_alpha)
-
-Use the Singularity in the repository folder to simplify the usage.
 
 Use '-C config_file.config' to specify a non-default configuration file.
 The '-C config_file.config' must be inserted after the nextflow call

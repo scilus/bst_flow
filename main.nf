@@ -8,7 +8,7 @@ if(params.help) {
                 "use_orientational_priors":"$params.use_orientational_priors",
                 "use_bs_tracking_mask":"$params.use_bs_tracking_mask",
                 "bs_tracking_mask_dilation":"$params.bs_tracking_mask_dilation",
-                "use_bs_endpoints_mask":"$params.use_bs_endpoints_mask",
+                "use_bs_endpoints_include":"$params.use_bs_endpoints_include",
                 "bs_endpoints_mask_dilation":"$params.bs_endpoints_mask_dilation",
                 "use_tracking_mask_as_seeding":"$params.use_tracking_mask_as_seeding",
                 "local_tracking":"$params.local_tracking",
@@ -56,7 +56,7 @@ log.info "Atlas Directory: $params.atlas_directory"
 log.info ""
 log.info "[Priors options]"
 log.info "BS Tracking Mask: $params.use_bs_tracking_mask"
-log.info "BS Endpoints Mask: $params.use_bs_endpoints_mask"
+log.info "BS Endpoints Mask: $params.use_bs_endpoints_include"
 log.info "Endpoints Mask Dilation: $params.bs_endpoints_mask_dilation"
 log.info "Seeding From Tracking Mask: $params.use_tracking_mask_as_seeding"
 log.info "Tracking Mask Dilation: $params.bs_tracking_mask_dilation"
@@ -149,7 +149,7 @@ process Warp_Bundle {
     each file(bundle_name) from atlas_bundles
 
     output:
-    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors, models_for_recobundle
+    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors, models_for_recobundles
     script:
     """
     ConvertTransformFile 3 ${affine} ${affine}.txt --hm --ras
@@ -256,7 +256,7 @@ process Local_Tracking {
     output:
     set sid, val(bundle_name), val(algo), val('local'), \
         "${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk" into \
-            local_bundles_recobundles
+            local_bundles_for_recobundles
     when: 
     params.local_tracking
     script:
@@ -282,7 +282,7 @@ process Generate_Map_Include {
     when: 
     params.pft_tracking
     script:
-    if (params.use_bs_endpoints_mask)
+    if (params.use_bs_endpoints_include)
         """
         maskfilter ${endpoints_mask} dilate dilate_endpoints.nii.gz \
             -npass $params.bs_endpoints_mask_dilation
@@ -337,7 +337,7 @@ process PFT_Tracking {
     output:
     set sid, val(bundle_name), val(algo), val('pft'), \
         "${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk" into \
-        pft_bundles_recobundles
+        pft_bundles_for_recobundles
     when: 
     params.pft_tracking
     script:
@@ -354,17 +354,17 @@ process PFT_Tracking {
 
 local_bundles_for_recobundles
     .concat(pft_bundles_for_recobundles)
-    .set{bundles_for_recobundle}
+    .set{bundles_for_recobundles}
 
-bundles_for_recobundle
+bundles_for_recobundles
     .combine(models_for_recobundles, by: [0,1])
-    .set{bundles_models_for_recobundle}
+    .set{bundles_models_for_recobundles}
 process Recobundles_Segmentation {
     cpus 2
     publishDir = {"./results_bst/$sid/$task.process/"}
     input:
     set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(model) from \
-        bundles_models_for_recobundle
+        bundles_models_for_recobundles
 
     output:
     set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_segmented.trk" into bundles_for_outliers
@@ -373,7 +373,8 @@ process Recobundles_Segmentation {
     script:
     """
     printf "1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1" >> identity.txt
-    scil_recognize_single_bundle.py ${bundle} ${model} identity.txt \
+    scil_remove_invalid_streamlines.py ${bundle} tmp.trk --remove_single_point
+    scil_recognize_single_bundle.py tmp.trk ${model} identity.txt \
         ${sid}__${bundle_name}_${algo}_${tracking_source}_segmented.trk \
         --tractogram_clustering_thr $params.wb_clustering_thr \
         --model_clustering_thr $params.model_clustering_thr \
