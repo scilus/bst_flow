@@ -15,9 +15,7 @@ DESCRIPTION
                                     │   ├── *fodf.nii.gz
                                     │   ├── *map_exclude.nii.gz (optional, pft)
                                     │   ├── *map_include.nii.gz (optional, pft)
-                                    │   ├── *tracking_mask.nii.gz
-                                    │   ├── *inclusion_mask.nii.gz (optional)
-                                    │   └── *exclusion_mask.nii.gz (optional)
+                                    │   └── *tracking_mask.nii.gz
                                     └── S2
                                         └── *.nii.gz
 
@@ -32,7 +30,7 @@ OPTIONAL ARGUMENTS (current value)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
 --bs_tracking_mask_dilation             Dilate the tracking mask by a factor ($bs_endpoints_mask_dilation)
 
---use_bs_endpoints_mask                 Use the bundle-specific mask for termination ($use_bs_endpoints_mask)
+--use_bs_endpoints_mask                 Use the bundle-specific mask for termination, PFT only ($use_bs_endpoints_mask)
 --bs_endpoints_mask_dilation            Dilate the endpoint mask by a factor ($bs_endpoints_mask_dilation)
 --use_tracking_mask_as_seeding          Tractography will be initialized in the tracking mask rather than endpoints ($use_tracking_mask_as_seeding)
 
@@ -48,7 +46,7 @@ OPTIONAL ARGUMENTS (current value)
 --compress_error_tolerance              Error tolerance for streamline compression in mm ($compress_error_tolerance)
 --tracking_seed                         Value for the random seed generator for tracking ($tracking_seed)
 
---recobundle                            Clean up tractography using model shape ($recobundle)
+--recobundles                            Clean up tractography using model shape ($recobundles)
 --outlier_alpha                         Remove spurious streamlines based on shape ($outlier_alpha)
 
 Use the Singularity in the repository folder to simplify the usage.

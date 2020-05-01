@@ -21,7 +21,7 @@ if(params.help) {
                 "max_length":"$params.max_length",
                 "compress_error_tolerance":"$params.compress_error_tolerance",
                 "tracking_seed":"$params.tracking_seed",
-                "recobundle":"$params.recobundle",
+                "recobundles":"$params.recobundles",
                 "wb_clustering_thr":"$params.wb_clustering_thr",
                 "model_clustering_thr":"$params.model_clustering_thr",
                 "prunning_thr":"$params.prunning_thr",
@@ -73,7 +73,7 @@ log.info "Maximum Length: $params.max_length"
 log.info "Compressing Threshold: $params.compress_error_tolerance"
 log.info ""
 log.info "[Recobundles options]"
-log.info "Segmentation with Recobundle: $params.recobundle"
+log.info "Segmentation with Recobundles: $params.recobundles"
 log.info "Whole Brain Clustering Threshold: $params.wb_clustering_thr"
 log.info "Model Clustering Threshold: $params.model_clustering_thr"
 log.info "Prunning Threshold: $params.prunning_thr"
@@ -95,9 +95,6 @@ root = file(params.root)
                         size: 2,
                         maxDepth:2,
                         flat: true) {it.parent.name}
-
-    masks_for_exclusion = Channel.fromPath("$root/**/*exclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
-    masks_for_inclusion = Channel.fromPath("$root/**/*inclusion_mask.nii.gz").map{ch1 -> [ch1.parent.name, ch1]}
 
     atlas_anat = Channel.fromPath("$params.atlas_anat")
     atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
@@ -259,7 +256,7 @@ process Local_Tracking {
     output:
     set sid, val(bundle_name), val(algo), val('local'), \
         "${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk" into \
-            local_bundles_for_exclusion
+            local_bundles_recobundles
     when: 
     params.local_tracking
     script:
@@ -269,7 +266,6 @@ process Local_Tracking {
         --sh_basis $params.basis --min_len $params.min_length --max_len $params.max_length \
         --$params.seeding $params.nbr_seeds --compress $params.compress_error_tolerance \
         --seed $params.tracking_seed --algo ${algo}
-    scil_remove_invalid_streamlines.py ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk  ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk -f
     """
 }
 
@@ -341,7 +337,7 @@ process PFT_Tracking {
     output:
     set sid, val(bundle_name), val(algo), val('pft'), \
         "${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk" into \
-        pft_bundles_for_exclusion
+        pft_bundles_recobundles
     when: 
     params.pft_tracking
     script:
@@ -356,80 +352,14 @@ process PFT_Tracking {
     """
 }
 
-local_bundles_for_exclusion
-    .concat(pft_bundles_for_exclusion)
-    .set{bundles_for_exclusion}
-
-tmp = 0
-masks_for_exclusion
-    .into{masks_for_exclusion_process; masks_for_exclusion_count}
-masks_for_exclusion_count
-    .count()
-    .subscribe{ tmp = it }
-if(tmp == 0)
-{
-    bundles_for_exclusion
-        .set{bundles_for_inclusion}
-}
-else
-{
-    bundles_for_exclusion
-        .combine(masks_for_exclusion_process, by: 0)
-        .set{bundles_masks_for_exclusion}
-    process Mask_Exclusion{
-        cpus 2
-        publishDir = {"./results_bst/$sid/$task.process/"}
-        input:
-        set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(mask) from \
-            bundles_masks_for_exclusion
-        
-
-        output:
-        set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_masked_ex.trk" into bundles_for_inclusion
-        script:
-        """
-        scil_filter_tractogram.py ${bundle} ${sid}__${bundle_name}_${algo}_${tracking_source}_masked_ex.trk --drawn_roi ${mask} any exclude
-        """
-    }
-}
-
-tmp = 0
-masks_for_inclusion
-    .into{masks_for_inclusion_process; masks_for_inclusion_count}
-masks_for_inclusion_count
-    .count()
-    .subscribe{ tmp = it }
-if(tmp == 0)
-{
-    bundles_for_inclusion
-        .set{bundles_for_recobundle}
-}
-else
-{
-    bundles_for_inclusion
-        .combine(masks_for_inclusion_process, by: 0)
-        .set{bundles_masks_for_inclusion}
-    process Mask_Inclusion{
-        cpus 2
-        publishDir = {"./results_bst/$sid/$task.process/"}
-        input:
-        set sid, val(bundle_name), val(algo), val(tracking_source), file(bundle), file(mask) from \
-            bundles_masks_for_inclusion
-
-        output:
-        set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_masked_in.trk" into bundles_for_recobundle
-        script:
-        """
-        scil_filter_tractogram.py ${bundle} ${sid}__${bundle_name}_${algo}_${tracking_source}_masked_in.trk --drawn_roi ${mask} any include
-        """
-    }
-}
-
+local_bundles_for_recobundles
+    .concat(pft_bundles_for_recobundles)
+    .set{bundles_for_recobundle}
 
 bundles_for_recobundle
-    .combine(models_for_recobundle, by: [0,1])
+    .combine(models_for_recobundles, by: [0,1])
     .set{bundles_models_for_recobundle}
-process Recobundle_Segmentation {
+process Recobundles_Segmentation {
     cpus 2
     publishDir = {"./results_bst/$sid/$task.process/"}
     input:
@@ -439,7 +369,7 @@ process Recobundle_Segmentation {
     output:
     set sid, val(bundle_name), val(algo), val(tracking_source), "${sid}__${bundle_name}_${algo}_${tracking_source}_segmented.trk" into bundles_for_outliers
     when: 
-    params.recobundle
+    params.recobundles
     script:
     """
     printf "1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1" >> identity.txt
@@ -462,7 +392,7 @@ process Outliers_Removal {
     output:
     file "${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk"
     when: 
-    params.recobundle
+    params.recobundles
     script:
     """
     scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
