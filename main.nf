@@ -133,8 +133,6 @@ process Register_Anat {
     script:
     """
     antsRegistrationSyNQuick.sh -d 3 -f ${native_anat} -m ${atlas} -n ${params.register_processes} -o ${sid}__output
-    mrconvert "${sid}__outputWarped.nii.gz" "${sid}__outputWarped.nii.gz" -force
-    mrconvert "${sid}__output1InverseWarp.nii.gz" "${sid}__output1InverseWarp.nii.gz" -force
     """ 
 }
 
@@ -183,15 +181,15 @@ process Generate_Priors {
     """
     scil_generate_priors_from_bundle.py ${bundle} ${fod} ${mask} \
         --sh_basis $params.basis --output_prefix ${sid}__${bundle_name}_
-    maskfilter ${sid}__${bundle_name}_todi_mask.nii.gz \
-        dilate dilate_todi.nii.gz -npass $params.bs_tracking_mask_dilation
-    mrcalc ${mask} dilate_todi.nii.gz -mult \
-        ${sid}__${bundle_name}_todi_mask_dilate.nii.gz
+    scil_image_math.py dilation ${sid}__${bundle_name}_todi_mask.nii.gz \
+        $params.bs_tracking_mask_dilation dilate_todi.nii.gz --data_type uint8
+    scil_image_math.py multiplication ${mask} dilate_todi.nii.gz \
+        ${sid}__${bundle_name}_todi_mask_dilate.nii.gz --data_type uint8
 
-    maskfilter ${sid}__${bundle_name}_endpoints_mask.nii.gz \
-        dilate dilate_endpoints.nii.gz -npass $params.bs_endpoints_mask_dilation
-    mrcalc ${mask} dilate_endpoints.nii.gz -mult \
-        ${sid}__${bundle_name}_endpoints_mask_dilate.nii.gz
+    scil_image_math.py dilation ${sid}__${bundle_name}_endpoints_mask.nii.gz \
+        $params.bs_endpoints_mask_dilation dilate_endpoints.nii.gz --data_type uint8
+    scil_image_math.py multiplication ${mask} dilate_endpoints.nii.gz \
+        ${sid}__${bundle_name}_endpoints_mask_dilate.nii.gz --data_type uint8
     """
 }
 
@@ -210,8 +208,8 @@ process Seeding_Mask {
         """
     else
         """
-        mrcalc ${tracking_mask} ${endpoints_mask} -mult \
-            ${sid}__${bundle_name}_seeding_mask.nii.gz
+        scil_image_math.py multiplication ${tracking_mask} ${endpoints_mask} \
+            ${sid}__${bundle_name}_seeding_mask.nii.gz --data_type uint8
         """
 }
 
@@ -284,10 +282,10 @@ process Generate_Map_Include {
     script:
     if (params.use_bs_endpoints_include)
         """
-        maskfilter ${endpoints_mask} dilate dilate_endpoints.nii.gz \
-            -npass $params.bs_endpoints_mask_dilation
-        scil_mask_math.py intersection dilate_endpoints.nii.gz ${map_include} \
-            ${sid}__${bundle_name}_map_include.nii.gz
+        scil_image_math.py dilation ${endpoints_mask} $params.bs_endpoints_mask_dilation \
+            dilate_endpoints.nii.gz --data_type uint8
+        scil_image_math.py multiplication dilate_endpoints.nii.gz ${map_include} \
+            ${sid}__${bundle_name}_map_include.nii.gz --data_type float32
         """
     else
         """
@@ -311,10 +309,11 @@ process Generate_Map_Exclude {
     script:
     if (params.use_bs_tracking_mask)
         """
-        mrthreshold ${tracking_mask} inverted_mask.nii.gz -invert
+        scil_image_math.py invert ${tracking_mask} inverted_mask.nii.gz \
+            --data_type uint8
         
-        mrcalc ${map_exclude} inverted_mask.nii.gz \
-            -add ${sid}__${bundle_name}_map_exclude.nii.gz
+        scil_image_math.py addition ${map_exclude} inverted_mask.nii.gz \
+            ${sid}__${bundle_name}_map_exclude.nii.gz --data_type float32
         """
     else
         """
