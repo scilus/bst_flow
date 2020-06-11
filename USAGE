@@ -30,7 +30,7 @@ OPTIONAL ARGUMENTS (current value)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
 --bs_tracking_mask_dilation             Dilate the tracking mask by a factor ($bs_endpoints_mask_dilation)
 
---use_bs_endpoints_include                 Use the bundle-specific mask for termination, PFT only ($use_bs_endpoints_include)
+--use_bs_endpoints_include              Use the bundle-specific mask for termination, PFT only ($use_bs_endpoints_include)
 --bs_endpoints_mask_dilation            Dilate the endpoint mask by a factor ($bs_endpoints_mask_dilation)
 --use_tracking_mask_as_seeding          Tractography will be initialized in the tracking mask rather than endpoints ($use_tracking_mask_as_seeding)
 
