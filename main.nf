@@ -2,8 +2,8 @@
 
 if(params.help) {
     usage = file("$baseDir/USAGE")
-
     cpu_count = Runtime.runtime.availableProcessors()
+
     bindings = ["atlas_directory":"$params.atlas_directory",
                 "use_orientational_priors":"$params.use_orientational_priors",
                 "use_bs_tracking_mask":"$params.use_bs_tracking_mask",
@@ -25,8 +25,8 @@ if(params.help) {
                 "wb_clustering_thr":"$params.wb_clustering_thr",
                 "model_clustering_thr":"$params.model_clustering_thr",
                 "prunning_thr":"$params.prunning_thr",
-                "outlier_alpha":"$params.outlier_alpha"
-                ]
+                "outlier_alpha":"$params.outlier_alpha"]
+
     engine = new groovy.text.SimpleTemplateEngine()
     template = engine.createTemplate(usage.text).make(bindings)
     print template.toString()
