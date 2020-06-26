@@ -377,7 +377,7 @@ process Recobundles_Segmentation {
         ${sid}__${bundle_name}_${algo}_${tracking_source}_segmented.trk \
         --tractogram_clustering_thr $params.wb_clustering_thr \
         --model_clustering_thr $params.model_clustering_thr \
-        --slr_threads 1 --pruning_thr $params.prunning_thr
+        --slr_threads 1 --pruning_thr $params.prunning_thr --seed 0
     """
 }
 
