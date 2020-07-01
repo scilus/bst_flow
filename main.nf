@@ -16,7 +16,7 @@ if(params.help) {
                 "seeding":"$params.seeding",
                 "nbr_seeds":"$params.nbr_seeds",
                 "algo":"$params.algo",
-                "basis":"$params.basis",
+                "sh_basis":"$params.sh_basis",
                 "min_length":"$params.min_length",
                 "max_length":"$params.max_length",
                 "compress_error_tolerance":"$params.compress_error_tolerance",
@@ -130,6 +130,7 @@ process Register_Anat {
     output:
     set sid, "${sid}__output1InverseWarp.nii.gz", "${sid}__output0GenericAffine.mat" into deformation_for_warping
     file "${sid}__outputWarped.nii.gz"
+    file "${sid}__output1Warp.nii.gz"
     script:
     """
     antsRegistrationSyNQuick.sh -d 3 -f ${native_anat} -m ${atlas} -n ${params.register_processes} -o ${sid}__output
@@ -150,9 +151,7 @@ process Warp_Bundle {
     set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors, models_for_recobundles
     script:
     """
-    ConvertTransformFile 3 ${affine} ${affine}.txt --hm --ras
-    scil_apply_transform_to_tractogram.py ${bundle_name} ${warp} ${affine}.txt ${bundle_name.baseName}_linear.trk --inverse --remove_invalid -f
-    scil_apply_warp_to_tractogram.py ${bundle_name.baseName}_linear.trk ${anat} ${warp} ${sid}__${bundle_name.baseName}_warp.trk --remove_invalid -f
+    scil_apply_transform_to_tractogram.py ${bundle_name} ${anat} ${affine} ${sid}__${bundle_name.baseName}_warp.trk --inverse --cut_invalid --in_deformation ${warp}
     """ 
 }
 
@@ -179,8 +178,9 @@ process Generate_Priors {
     set sid, val(bundle_name), "${sid}__${bundle_name}_endpoints_mask_dilate.nii.gz" into masks_for_map_in
     script:
     """
-    scil_generate_priors_from_bundle.py ${bundle} ${fod} ${mask} \
-        --sh_basis $params.basis --output_prefix ${sid}__${bundle_name}_
+    scil_image_math.py convert ${mask} mask.nii.gz --data_type uint8
+    scil_generate_priors_from_bundle.py ${bundle} ${fod} mask.nii.gz \
+        --sh_basis $params.sh_basis --out_prefix ${sid}__${bundle_name}_
     scil_image_math.py dilation ${sid}__${bundle_name}_todi_mask.nii.gz \
         $params.bs_tracking_mask_dilation dilate_todi.nii.gz --data_type uint8
     scil_image_math.py multiplication ${mask} dilate_todi.nii.gz \
@@ -260,10 +260,11 @@ process Local_Tracking {
     script:
     """
     scil_compute_local_tracking.py ${efod} ${seeding_mask} ${tracking_mask} \
-        ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
-        --sh_basis $params.basis --min_len $params.min_length --max_len $params.max_length \
+        tracking.trk --sh_basis $params.sh_basis --min_len $params.min_length --max_len $params.max_length \
         --$params.seeding $params.nbr_seeds --compress $params.compress_error_tolerance \
         --seed $params.tracking_seed --algo ${algo}
+    scil_filter_tractogram.py tracking.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
+        --drawn_roi ${seeding_mask} either_end include
     """
 }
 
@@ -344,7 +345,7 @@ process PFT_Tracking {
     """
     scil_compute_pft.py ${efod} ${seeding_mask} ${map_include} ${map_exclude} \
         ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
-        --algo $algo --sh_basis $params.basis --min_length $params.min_length \
+        --algo $algo --sh_basis $params.sh_basis --min_length $params.min_length \
         --max_length $params.max_length --$seeding $params.nbr_seeds \
         --compress $params.compress_error_tolerance --seed $params.tracking_seed
     scil_remove_invalid_streamlines.py ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk  ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk -f
