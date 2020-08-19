@@ -263,7 +263,8 @@ process Local_Tracking {
         tracking.trk --sh_basis $params.sh_basis --min_len $params.min_length --max_len $params.max_length \
         --$params.seeding $params.nbr_seeds --compress $params.compress_error_tolerance \
         --seed $params.tracking_seed --algo ${algo}
-    scil_filter_tractogram.py tracking.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
+    scil_remove_invalid_streamlines.py tracking.trk tracking_ic.trk
+    scil_filter_tractogram.py tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
         --drawn_roi ${seeding_mask} either_end include
     """
 }
