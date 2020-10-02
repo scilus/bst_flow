@@ -96,6 +96,11 @@ root = file(params.root)
                         maxDepth:2,
                         flat: true) {it.parent.name}
 
+if (!(params.atlas_anat) || !(params.atlas_directory)) {
+    error "You must specify all 3 atlas related input. --atlas_anat " +
+    "and --atlas_directory all are mandatory."
+}
+
     atlas_anat = Channel.fromPath("$params.atlas_anat")
     atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
     algo_list = params.algo?.tokenize(',')
@@ -226,11 +231,11 @@ process Tracking_Mask {
     script:
     if (params.use_bs_tracking_mask)
         """
-        mv ${bs_mask} ${sid}__${bundle_name}_tracking_mask.nii.gz
+        scil_image_math.py convert ${bs_mask} ${sid}__${bundle_name}_tracking_mask.nii.gz --data_type uint8
         """
     else
         """
-        mv ${tracking_mask} ${sid}__${bundle_name}_tracking_mask.nii.gz
+        scil_image_math.py convert ${tracking_mask} ${sid}__${bundle_name}_tracking_mask.nii.gz --data_type uint8
         """
 }
 
