@@ -2,6 +2,8 @@
 ===================
 
 Run the Bundle Specific Tractography pipeline.
+To access the template in the original publication:
+https://zenodo.org/record/4104309#.X4xduZ1KhdU
 
 If you use this pipeline, please cite:
 

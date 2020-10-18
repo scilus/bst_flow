@@ -97,7 +97,7 @@ root = file(params.root)
                         flat: true) {it.parent.name}
 
 if (!(params.atlas_anat) || !(params.atlas_directory)) {
-    error "You must specify all 3 atlas related input. --atlas_anat " +
+    error "You must specify all 2 atlas related input. --atlas_anat " +
     "and --atlas_directory all are mandatory."
 }
 
