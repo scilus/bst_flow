@@ -5,6 +5,8 @@ if(params.help) {
     cpu_count = Runtime.runtime.availableProcessors()
 
     bindings = ["atlas_directory":"$params.atlas_directory",
+                "atlas_anat":"$params.atlas_anat",
+                "use_precomputed_transfo":"$params.use_precomputed_transfo",
                 "use_orientational_priors":"$params.use_orientational_priors",
                 "use_bs_tracking_mask":"$params.use_bs_tracking_mask",
                 "bs_tracking_mask_dilation":"$params.bs_tracking_mask_dilation",
@@ -84,17 +86,23 @@ log.info ""
 log.info "Input: $params.input"
 root = file(params.input)
 /* Watch out, files are ordered alphabetically in channel */
-    in_data = Channel
-        .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
-                        size: 3,
-                        maxDepth:2,
-                        flat: true) {it.parent.name}
+in_data = Channel
+    .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
+                    size: 3,
+                    maxDepth:2,
+                    flat: true) {it.parent.name}
 
-    map_pft = Channel
-        .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
-                        size: 2,
-                        maxDepth:2,
-                        flat: true) {it.parent.name}
+in_transfo = Channel
+    .fromFilePairs("$root/**/{*0GenericAffine.mat,*1InverseWarp.nii.gz}",
+                    size: 2,
+                    maxDepth:2,
+                    flat: true) {it.parent.name}
+
+map_pft = Channel
+    .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
+                    size: 2,
+                    maxDepth:2,
+                    flat: true) {it.parent.name}
 
 if (!(params.atlas_anat) || !(params.atlas_directory)) {
     error "You must specify all 2 atlas related input. --atlas_anat " +
@@ -124,16 +132,22 @@ workflow.onComplete {
     log.info "Execution duration: $workflow.duration"
 }
 
-anat_for_registration
-    .combine(atlas_anat)
-    .set{anats_for_registration}
+if (!params.use_precomputed_transfo) {
+    anat_for_registration
+        .combine(atlas_anat)
+        .set{anats_for_registration}
+}
+else {
+    anats_for_registration = Channel.empty()
+}
+
 process Register_Anat {
     cpus params.register_processes
     input:
     set sid, file(native_anat), file(atlas) from anats_for_registration
 
     output:
-    set sid, "${sid}__output1InverseWarp.nii.gz", "${sid}__output0GenericAffine.mat" into deformation_for_warping
+    set sid, "${sid}__output0GenericAffine.mat", "${sid}__output1InverseWarp.nii.gz" into transfo_from_registration
     file "${sid}__outputWarped.nii.gz"
     file "${sid}__output1Warp.nii.gz"
     script:
@@ -142,14 +156,21 @@ process Register_Anat {
     """ 
 }
 
+if (!params.use_precomputed_transfo) {
+    transfo_from_registration.set{deformation_for_warping}
+}
+else {
+    in_transfo.set{deformation_for_warping}
+}
 
 anat_for_deformation
     .join(deformation_for_warping)
     .set{anat_deformation_for_warp}
+
 process Warp_Bundle {
     cpus 2
     input:
-    set sid, file(anat), file(warp), file(affine) from anat_deformation_for_warp
+    set sid, file(anat), file(affine), file(warp) from anat_deformation_for_warp
     each file(bundle_name) from atlas_bundles
 
     output:
@@ -159,7 +180,6 @@ process Warp_Bundle {
     scil_apply_transform_to_tractogram.py ${bundle_name} ${anat} ${affine} ${sid}__${bundle_name.baseName}_warp.trk --inverse --cut_invalid --in_deformation ${warp}
     """ 
 }
-
 
 fod_and_mask_for_priors
     .combine(bundles_for_priors, by: 0)
@@ -249,6 +269,7 @@ tracking_mask_for_local_tracking
     .combine(fod_for_local_tracking, by: [0,1])
     .combine(seeding_mask_for_local_tracking, by: [0,1])
     .set{mask_seeding_mask_fod_for_tracking}
+
 process Local_Tracking {
     cpus 2
     input:
@@ -277,6 +298,7 @@ process Local_Tracking {
 map_in_for_tracking
     .combine(masks_for_map_in, by: 0)
     .set{masks_map_in_for_bs}
+
 process Generate_Map_Include {
     cpus 2
     input:
@@ -303,6 +325,7 @@ process Generate_Map_Include {
 map_ex_for_tracking
     .combine(masks_for_map_ex, by: 0)
     .set{masks_map_ex_for_bs}
+
 process Generate_Map_Exclude {
     cpus 2
     input:
@@ -333,6 +356,7 @@ map_ex_for_PFT_tracking
     .combine(fod_for_PFT_tracking, by: [0,1])
     .combine(seeding_mask_for_PFT_tracking, by: [0,1])
     .set{maps_seeding_mask_fod_for_tracking}
+
 process PFT_Tracking {
     cpus 2
     input:

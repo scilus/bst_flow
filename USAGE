@@ -1,9 +1,35 @@
 Pipeline for bundle-specific tractography
 =========================================
 
+Run our state-of-the-art bundle specific tractography pipeline.
+Requires the input FA, MASK and FODF (and optional NII.GZ) to all be co-registered.
+All the bundle files in the ATLAS_DIRECTORY must be co-registered to the ATLAS_ANAT.
+
+The bundle files must cover a sufficient spatial extend (e.g. a population average)
+and have consistent endpoints (no broken streamline in WM). The shape must also be
+coherent (no loop, no sharp turn, etc.), streamlines most all be 'plausible'.
+DO NOT USE THIS ALGORITHM TO DISCOVER UNKNOWN ANATOMY!
+
+We recommand 3 ways of using this pipeline.
+Basic BST: Set to 'false' all parameters starting with '--use_', this will be equivalent
+    to simply seeding from extremities.
+
+Partial BST: Set to 'true' all parameters starting with '--use_', except 
+    --use_orientational_priors, this will be equivalent to an aggressive seeding from WM,
+    tractography will be limited to the pathways itself (with some dilation)
+    to simply seeding from extremities.
+
+Full BST: Set to 'true' all parameters starting with '--use_', same as above, but
+    the orientational priors (enhanced FOD) will be used too.
+
+Read this publication before using:
+    Rheault, Francois, et al. "Bundle-specific tractography with incorporated
+    anatomical and orientational priors." NeuroImage 186 (2019)
+    https://doi.org/10.1016/j.neuroimage.2018.11.018
+
 USAGE
 
-nextflow run main.nf --input ... [OPTIONAL_ARGUMENTS]
+nextflow run main.nf [OPTIONAL_ARGUMENTS] --input --atlas_anat --atlas_directory
 
 DESCRIPTION
 
@@ -15,6 +41,8 @@ DESCRIPTION
                                     │   ├── *fodf.nii.gz
                                     │   ├── *map_exclude.nii.gz (optional, pft)
                                     │   ├── *map_include.nii.gz (optional, pft)
+                                    │   ├── *0GenericAffine.mat (optional, transfo)
+                                    │   ├── *Inverse1Warp.nii.gz (optional, transfo)
                                     │   └── *tracking_mask.nii.gz
                                     └── S2
                                         └── *.nii.gz
@@ -26,6 +54,8 @@ DESCRIPTION
 NOTES
 
 OPTIONAL ARGUMENTS (current value)
+--use_precomputed_transfo               Warp atlas using a preexisting transformation ($use_precomputed_transfo)
+
 --use_orientational_priors              Compute and use the orientation priors ($use_orientational_priors)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
 --bs_tracking_mask_dilation             Dilate the tracking mask by a factor ($bs_endpoints_mask_dilation)
