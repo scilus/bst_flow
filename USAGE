@@ -22,6 +22,8 @@ DESCRIPTION
 --atlas_anat                        Reference image of the atlas
 --atlas_directory                   Path of the folder containing all the trk
                                     to be used by the pipeline
+--use_atlas_roi_seeding             Use pre-defined atlas ROI (as .nii.gz) for
+                                    seeding (basename must match) and overwrite --use_tracking_mask_as_seeding
 
 NOTES
 
