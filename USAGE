@@ -56,8 +56,6 @@ DESCRIPTION
 NOTES
 
 OPTIONAL ARGUMENTS (current value)
---use_precomputed_transfo               Warp atlas using a preexisting transformation (atlas->subj) ($use_precomputed_transfo)
-
 --use_orientational_priors              Compute and use the orientation priors ($use_orientational_priors)
 --use_bs_tracking_mask                  Use the bundle-specific mask for tracking ($use_bs_tracking_mask)
 --bs_tracking_mask_dilation             Dilate the tracking mask by a factor ($bs_endpoints_mask_dilation)

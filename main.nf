@@ -6,7 +6,6 @@ if(params.help) {
 
     bindings = ["atlas_directory":"$params.atlas_directory",
                 "atlas_anat":"$params.atlas_anat",
-                "use_precomputed_transfo":"$params.use_precomputed_transfo",
                 "use_atlas_roi_seeding":"$params.use_atlas_roi_seeding",
                 "use_orientational_priors":"$params.use_orientational_priors",
                 "use_bs_tracking_mask":"$params.use_bs_tracking_mask",
@@ -56,7 +55,6 @@ log.info ""
 log.info "[Atlas]"
 log.info "Atlas Anatomy: $params.atlas_anat"
 log.info "Atlas Directory: $params.atlas_directory"
-log.info "Use Precomputed Transfo: $params.use_precomputed_transfo"
 log.info ""
 log.info "[Priors options]"
 log.info "BS Tracking Mask: $params.use_bs_tracking_mask"
@@ -88,17 +86,30 @@ log.info ""
 log.info "Input: $params.input"
 root = file(params.input)
 /* Watch out, files are ordered alphabetically in channel */
-in_data = Channel
+Channel
     .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
                     size: 3,
                     maxDepth:2,
                     flat: true) {it.parent.name}
+    .into{in_data;check_count_data}
 
-in_transfo = Channel
-    .fromFilePairs("$root/**/{*0GenericAffine.mat,*1InverseWarp.nii.gz}",
-                    size: 2,
-                    maxDepth:2,
-                    flat: true) {it.parent.name}
+Channel
+    .fromPath("$root/**/*0GenericAffine.mat",
+                    maxDepth:1)
+    .map{[it.parent.name, it]}
+    .tap{affine_for_reg; check_simple_affine}
+    .map{ [it[0]] }
+    .set{sid_affine_included}
+
+Channel
+    .fromPath("$root/**/*1InverseWarp.nii.gz",
+                    maxDepth:1)
+    .map{[it.parent.name, it]}
+    .tap{warp_for_reg; check_simple_warp}
+    .map{ [it[0]] }
+    .set{sid_warp_included}
+
+Channel.empty().into{check_complex_affine;check_complex_warp;check_complex_subj}
 
 map_pft = Channel
     .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
@@ -132,13 +143,18 @@ algo_list = params.algo?.tokenize(',')
         tuple(sid, map_exclude)]}
     .separate(2)
 
+check_complex_affine.concat(check_simple_affine).count().set{affine_counter}
+check_complex_warp.concat(check_simple_warp).count().set{warp_counter}
+check_complex_subj.concat(check_count_data).count().set{subj_counter}
+
 workflow.onComplete {
     log.info "Pipeline completed at: $workflow.complete"
     log.info "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
     log.info "Execution duration: $workflow.duration"
 }
 
-if (!params.use_precomputed_transfo) {
+if (affine_counter.value != warp_counter.value || \
+    affine_counter.value != subj_counter.value) {
     anat_for_registration
         .combine(atlas_anat)
         .set{anats_for_registration}
@@ -162,11 +178,14 @@ process Register_Anat {
     """ 
 }
 
-if (!params.use_precomputed_transfo) {
+if (affine_counter.value != warp_counter.value || \
+    affine_counter.value != subj_counter.value) {
     transfo_from_registration.set{deformation_for_warping}
 }
 else {
-    in_transfo.set{deformation_for_warping}
+    affine_for_reg
+        .join(warp_for_reg, by: 0)
+        .set{deformation_for_warping}
 }
 
 if (params.use_atlas_roi_seeding) {
