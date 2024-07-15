@@ -382,7 +382,7 @@ process Local_Tracking {
         --seed $params.tracking_seed --algo ${algo}
     scil_remove_invalid_streamlines.py tracking.trk tracking_ic.trk
 
-    if [[ $params.use_atlas_roi_seeding  == "false" ]]]; then
+    if [[ $params.use_atlas_roi_seeding == "false" ]]; then
         scil_filter_tractogram.py tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
             --drawn_roi ${seeding_mask} either_end include
     else
