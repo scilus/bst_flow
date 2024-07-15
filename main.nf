@@ -381,8 +381,13 @@ process Local_Tracking {
         --$params.seeding $params.nbr_seeds --compress $params.compress_error_tolerance \
         --seed $params.tracking_seed --algo ${algo}
     scil_remove_invalid_streamlines.py tracking.trk tracking_ic.trk
-    scil_filter_tractogram.py tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
-        --drawn_roi ${seeding_mask} either_end include
+
+    if [[ $params.use_atlas_roi_seeding  == "false" ]]]; then
+        scil_filter_tractogram.py tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
+            --drawn_roi ${seeding_mask} either_end include
+    else
+        cp tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk
+    fi
     """
 }
 
@@ -512,14 +517,18 @@ process Outliers_Removal {
         bundles_for_outliers
 
     output:
-    file "${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk"
+    path "${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk", optional: true
     when: 
     params.recobundles
     script:
     """
-    scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
-    scil_outlier_rejection.py no_loops.trk  \
-        ${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk \
-        --alpha $params.outlier_alpha
+
+    if [ \$(stat -c%s "your_file.txt") -gt 1000 ]; then
+        scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
+        scil_outlier_rejection.py no_loops.trk  \
+            ${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk \
+            --alpha $params.outlier_alpha
+    fi
+
     """
 }
