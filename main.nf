@@ -5,6 +5,8 @@ if(params.help) {
     cpu_count = Runtime.runtime.availableProcessors()
 
     bindings = ["atlas_directory":"$params.atlas_directory",
+                "atlas_anat":"$params.atlas_anat",
+                "use_atlas_roi_seeding":"$params.use_atlas_roi_seeding",
                 "use_orientational_priors":"$params.use_orientational_priors",
                 "use_bs_tracking_mask":"$params.use_bs_tracking_mask",
                 "bs_tracking_mask_dilation":"$params.bs_tracking_mask_dilation",
@@ -84,26 +86,45 @@ log.info ""
 log.info "Input: $params.input"
 root = file(params.input)
 /* Watch out, files are ordered alphabetically in channel */
-    in_data = Channel
-        .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
-                        size: 3,
-                        maxDepth:2,
-                        flat: true) {it.parent.name}
+Channel
+    .fromFilePairs("$root/**/{*fa.nii.gz,*fodf.nii.gz,*tracking_mask.nii.gz}",
+                    size: 3,
+                    maxDepth:2,
+                    flat: true) {it.parent.name}
+    .into{in_data;check_count_data}
 
-    map_pft = Channel
-        .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
-                        size: 2,
-                        maxDepth:2,
-                        flat: true) {it.parent.name}
+Channel
+    .fromPath("$root/**/*0GenericAffine.mat",
+                    maxDepth:1)
+    .map{[it.parent.name, it]}
+    .tap{affine_for_reg; check_simple_affine}
+
+Channel
+    .fromPath("$root/**/*1InverseWarp.nii.gz",
+                    maxDepth:1)
+    .map{[it.parent.name, it]}
+    .tap{warp_for_reg; check_simple_warp}
+
+Channel.empty().into{check_complex_affine;check_complex_warp;check_complex_subj}
+
+map_pft = Channel
+    .fromFilePairs("$root/**/{*map_exclude.nii.gz,*map_include.nii.gz}",
+                    size: 2,
+                    maxDepth:2,
+                    flat: true) {it.parent.name}
 
 if (!(params.atlas_anat) || !(params.atlas_directory)) {
     error "You must specify all 2 atlas related input. --atlas_anat " +
     "and --atlas_directory all are mandatory."
 }
 
-    atlas_anat = Channel.fromPath("$params.atlas_anat")
-    atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
-    algo_list = params.algo?.tokenize(',')
+atlas_anat = Channel.fromPath("$params.atlas_anat")
+atlas_bundles = Channel.fromPath("$params.atlas_directory/*.trk")
+atlas_seeds = Channel.fromPath("$params.atlas_directory/*.nii.gz")
+atlas_bundles
+    .into{atlas_bundles_for_warp;atlas_bundles_for_match}
+
+algo_list = params.algo?.tokenize(',')
 
 (anat_for_registration, anat_for_deformation, fod_and_mask_for_priors) = in_data
     .map{sid, anat, fodf, tracking_mask -> 
@@ -118,22 +139,33 @@ if (!(params.atlas_anat) || !(params.atlas_directory)) {
         tuple(sid, map_exclude)]}
     .separate(2)
 
+check_complex_affine.concat(check_simple_affine).count().set{affine_counter}
+check_complex_warp.concat(check_simple_warp).count().set{warp_counter}
+check_complex_subj.concat(check_count_data).count().set{subj_counter}
+
 workflow.onComplete {
     log.info "Pipeline completed at: $workflow.complete"
     log.info "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
     log.info "Execution duration: $workflow.duration"
 }
 
-anat_for_registration
-    .combine(atlas_anat)
-    .set{anats_for_registration}
+if (affine_counter.value != warp_counter.value || \
+    affine_counter.value != subj_counter.value) {
+    anat_for_registration
+        .combine(atlas_anat)
+        .set{anats_for_registration}
+}
+else {
+    anats_for_registration = Channel.empty()
+}
+
 process Register_Anat {
     cpus params.register_processes
     input:
     set sid, file(native_anat), file(atlas) from anats_for_registration
 
     output:
-    set sid, "${sid}__output1InverseWarp.nii.gz", "${sid}__output0GenericAffine.mat" into deformation_for_warping
+    set sid, "${sid}__output0GenericAffine.mat", "${sid}__output1InverseWarp.nii.gz" into transfo_from_registration
     file "${sid}__outputWarped.nii.gz"
     file "${sid}__output1Warp.nii.gz"
     script:
@@ -142,24 +174,85 @@ process Register_Anat {
     """ 
 }
 
+if (affine_counter.value != warp_counter.value || \
+    affine_counter.value != subj_counter.value) {
+    transfo_from_registration.set{deformation_for_warping}
+}
+else {
+    affine_for_reg
+        .join(warp_for_reg, by: 0)
+        .set{deformation_for_warping}
+}
+
+if (params.use_atlas_roi_seeding) {
+    atlas_seeds
+        .map{file -> def basename = file.name.lastIndexOf('.nii.gz') > -1 ? file.name[0..-8] : file.baseName
+            [basename, file]
+            }
+        .set{nii_gz_files}
+    atlas_bundles_for_match
+        .map{file -> [file.baseName, file]}
+        .set{trk_files}
+    trk_files
+        .join(nii_gz_files, by: 0)
+        .set{trk_nii_gz_file}
+}
+else {
+    trk_nii_gz_file = Channel.empty()
+}
 
 anat_for_deformation
     .join(deformation_for_warping)
-    .set{anat_deformation_for_warp}
+    .into{anat_deformation_for_warp_1;anat_deformation_for_warp_2}
 process Warp_Bundle {
     cpus 2
     input:
-    set sid, file(anat), file(warp), file(affine) from anat_deformation_for_warp
-    each file(bundle_name) from atlas_bundles
+    set sid, file(anat), file(affine), file(warp) from anat_deformation_for_warp_1
+    each file(bundle_name) from atlas_bundles_for_warp
+    when:
+    !params.use_atlas_roi_seeding
 
     output:
-    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors, models_for_recobundles
+    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors_1, models_for_recobundles_1
     script:
     """
     scil_apply_transform_to_tractogram.py ${bundle_name} ${anat} ${affine} ${sid}__${bundle_name.baseName}_warp.trk --inverse --cut_invalid --in_deformation ${warp}
     """ 
 }
 
+anat_deformation_for_warp_2
+    .combine(trk_nii_gz_file)
+    .set{anat_deformation_trk_nii_gz_file}
+
+process Warp_Bundle_Seed {
+    cpus 2
+    input:
+    set sid, file(anat), file(affine), file(warp),
+        val(base_name), file(bundle_name), file(seeding_name) from anat_deformation_trk_nii_gz_file
+    when:
+    params.use_atlas_roi_seeding
+
+    output:
+    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into bundles_for_priors_2
+    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.nii.gz" into seeds_for_priors
+    set sid, val(bundle_name.baseName), "${sid}__${bundle_name.baseName}_warp.trk" into models_for_recobundles_2
+    script:
+    """
+    scil_apply_transform_to_tractogram.py ${bundle_name} ${anat} ${affine} \
+        ${sid}__${bundle_name.baseName}_warp.trk --inverse --cut_invalid --in_deformation ${warp}
+    antsApplyTransforms -d 3 -i ${seeding_name} -r ${anat} \
+        -o ${sid}__${bundle_name.baseName}_warp.nii.gz -t ${affine} \
+        -n NearestNeighbor -u uchar
+    """ 
+}
+
+models_for_recobundles_1
+    .concat(models_for_recobundles_2)
+    .set{models_for_recobundles}
+
+bundles_for_priors_1
+    .concat(bundles_for_priors_2)
+    .set{bundles_for_priors}
 
 fod_and_mask_for_priors
     .combine(bundles_for_priors, by: 0)
@@ -198,24 +291,38 @@ process Generate_Priors {
     """
 }
 
+if (params.use_atlas_roi_seeding) {
+    masks_for_seeding
+        .combine(seeds_for_priors, by: [0,1])
+        .map{sid, bundle_name, mask, seed, manual_seed -> 
+            [sid, bundle_name, mask, manual_seed]}
+        .set{masks_for_seeding_fix}
+}
+else{
+    masks_for_seeding
+        .set{masks_for_seeding_fix}
+}
+
+
 process Seeding_Mask {
     cpus 2
     input:
-    set sid, val(bundle_name), file(tracking_mask), file(endpoints_mask) from masks_for_seeding
+    set sid, val(bundle_name), file(tracking_mask), file(endpoints_mask) from masks_for_seeding_fix
 
     output:
     set sid, val(bundle_name), "${sid}__${bundle_name}_seeding_mask.nii.gz" into \
         seeding_mask_for_PFT_tracking, seeding_mask_for_local_tracking
     script:
-    if (params.use_tracking_mask_as_seeding)
-        """
-        mv ${tracking_mask} ${sid}__${bundle_name}_seeding_mask.nii.gz
-        """
-    else
-        """
-        scil_image_math.py multiplication ${tracking_mask} ${endpoints_mask} \
-            ${sid}__${bundle_name}_seeding_mask.nii.gz --data_type uint8
-        """
+if (params.use_tracking_mask_as_seeding && !params.use_atlas_roi_seeding) {
+    """
+    mv ${tracking_mask} ${sid}__${bundle_name}_seeding_mask.nii.gz
+    """
+} else {
+    """
+    scil_image_math.py multiplication ${tracking_mask} ${endpoints_mask} \
+        ${sid}__${bundle_name}_seeding_mask.nii.gz --data_type uint8
+    """
+}
 }
 
 process Tracking_Mask {
@@ -249,6 +356,7 @@ tracking_mask_for_local_tracking
     .combine(fod_for_local_tracking, by: [0,1])
     .combine(seeding_mask_for_local_tracking, by: [0,1])
     .set{mask_seeding_mask_fod_for_tracking}
+
 process Local_Tracking {
     cpus 2
     input:
@@ -269,14 +377,20 @@ process Local_Tracking {
         --$params.seeding $params.nbr_seeds --compress $params.compress_error_tolerance \
         --seed $params.tracking_seed --algo ${algo}
     scil_remove_invalid_streamlines.py tracking.trk tracking_ic.trk
-    scil_filter_tractogram.py tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
-        --drawn_roi ${seeding_mask} either_end include
+
+    if [[ $params.use_atlas_roi_seeding == "false" ]]; then
+        scil_filter_tractogram.py tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk \
+            --drawn_roi ${seeding_mask} either_end include
+    else
+        cp tracking_ic.trk ${sid}__${bundle_name}_${algo}_${params.seeding}_${params.nbr_seeds}.trk
+    fi
     """
 }
 
 map_in_for_tracking
     .combine(masks_for_map_in, by: 0)
     .set{masks_map_in_for_bs}
+
 process Generate_Map_Include {
     cpus 2
     input:
@@ -303,6 +417,7 @@ process Generate_Map_Include {
 map_ex_for_tracking
     .combine(masks_for_map_ex, by: 0)
     .set{masks_map_ex_for_bs}
+
 process Generate_Map_Exclude {
     cpus 2
     input:
@@ -333,6 +448,7 @@ map_ex_for_PFT_tracking
     .combine(fod_for_PFT_tracking, by: [0,1])
     .combine(seeding_mask_for_PFT_tracking, by: [0,1])
     .set{maps_seeding_mask_fod_for_tracking}
+
 process PFT_Tracking {
     cpus 2
     input:
@@ -397,14 +513,18 @@ process Outliers_Removal {
         bundles_for_outliers
 
     output:
-    file "${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk"
+    path "${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk", optional: true
     when: 
     params.recobundles
     script:
     """
-    scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
-    scil_outlier_rejection.py no_loops.trk  \
-        ${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk \
-        --alpha $params.outlier_alpha
+
+    if [ \$(stat -c%s ${bundle}) -gt 1000 ]; then
+        scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
+        scil_outlier_rejection.py no_loops.trk  \
+            ${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk \
+            --alpha $params.outlier_alpha
+    fi
+
     """
 }

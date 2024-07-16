@@ -1,9 +1,41 @@
 Pipeline for bundle-specific tractography
 =========================================
 
+Run our state-of-the-art bundle specific tractography pipeline.
+Requires the input FA, MASK and FODF (and optional NII.GZ) to all be co-registered.
+The option --use_atlas_roi_seeding will change the seeding behiavior to use a provided mask instead of creating from endpoints (or from the bundle itself if using --use_bs_tracking_mask). The basename of the .nii.gz must be the same as it associated .trk (they must form pairs to be matched).
+
+All the bundle files (multiple files, .trk) in the ATLAS_DIRECTORY must be co-registered to the ATLAS_ANAT (single file, .nii.gz).
+
+The bundle files must cover a sufficient spatial extend (e.g. a population average)
+and have consistent endpoints (no broken streamline in WM). The shape must also be
+coherent (no loop, no sharp turn, etc.), streamlines most all be 'plausible'.
+DO NOT USE THIS ALGORITHM TO DISCOVER UNKNOWN ANATOMY!
+
+We recommand 3 ways of using this pipeline:
+
+Basic BST: Set to 'false' all parameters starting with '--use_', this will be equivalent
+    to simply seeding from extremities (expects the atlas to have coherent endpoints at the GM/WM interface).
+
+Partial BST: Set to 'true' all parameters starting with '--use_', except 
+    --use_orientational_priors, this will be equivalent to an aggressive seeding from WM,
+    tractography will be limited to the pathways itself (with some dilation)
+    to simply seeding from extremities.
+
+Full BST: Set to 'true' all parameters starting with '--use_', same as above, but
+    the orientational priors (enhanced FOD) will be used too.
+
+Read this publication before using:
+    Rheault, Francois, et al. "Bundle-specific tractography with incorporated
+    anatomical and orientational priors." NeuroImage 186 (2019)
+    https://doi.org/10.1016/j.neuroimage.2018.11.018
+
+The optional 0GenericAffine.mat and Inverse1Warp.nii.gz files are the transformations from template space to the subject native space as obtained from a command similar to antsRegistrationSyNQuick.sh -d 3 -f ${MY_FA} -m ${ATLAS_ANAT}.
+Use only if you know what you are doing (this is to avoid a step when doing controlled batch processing) !
+
 USAGE
 
-nextflow run main.nf --input ... [OPTIONAL_ARGUMENTS]
+nextflow run main.nf [OPTIONAL_ARGUMENTS] --input --atlas_anat --atlas_directory
 
 DESCRIPTION
 
@@ -15,13 +47,22 @@ DESCRIPTION
                                     │   ├── *fodf.nii.gz
                                     │   ├── *map_exclude.nii.gz (optional, pft)
                                     │   ├── *map_include.nii.gz (optional, pft)
+                                    │   ├── *0GenericAffine.mat (optional, transfo)
+                                    │   ├── *Inverse1Warp.nii.gz (optional, transfo)
                                     │   └── *tracking_mask.nii.gz
                                     └── S2
                                         └── *.nii.gz
 
---atlas_anat                        Reference image of the atlas
---atlas_directory                   Path of the folder containing all the trk
-                                    to be used by the pipeline
+--atlas_anat                        Path to the reference image of the atlas (.nii.gz)
+--atlas_directory                   Path to the folder containing all the trk
+                                    to be used by the pipeline. (example below, filename can vary)
+                                    [atlas_directory]
+                                    ├── AF_L.trk
+                                    ├── AF_L.nii.gz (optional, see --use_atlas_roi_seeding)
+                                    ├── CST_L.trk
+                                    ├── CST_L.nii.gz (optional, see --use_atlas_roi_seeding)
+                                    ├── CC.trk
+                                    └── CC.nii.gz (optional, see --use_atlas_roi_seeding)
 
 NOTES
 
@@ -33,6 +74,8 @@ OPTIONAL ARGUMENTS (current value)
 --use_bs_endpoints_include              Use the bundle-specific mask for termination, PFT only ($use_bs_endpoints_include)
 --bs_endpoints_mask_dilation            Dilate the endpoint mask by a factor ($bs_endpoints_mask_dilation)
 --use_tracking_mask_as_seeding          Tractography will be initialized in the tracking mask rather than endpoints ($use_tracking_mask_as_seeding)
+--use_atlas_roi_seeding                 Use pre-defined atlas ROI (as .nii.gz) for seeding (basename must match),
+                                        see documentation above, overwrites --use_tracking_mask_as_seeding
 
 --local_tracking                        Perform local tractography ($local_tracking)
 --pft_tracking                          Perform particle filtering tractography ($pft_tracking)
