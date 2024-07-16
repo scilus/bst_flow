@@ -523,7 +523,7 @@ process Outliers_Removal {
     script:
     """
 
-    if [ \$(stat -c%s "your_file.txt") -gt 1000 ]; then
+    if [ \$(stat -c%s ${bundle}) -gt 1000 ]; then
         scil_detect_streamlines_loops.py ${bundle} no_loops.trk -a 300
         scil_outlier_rejection.py no_loops.trk  \
             ${sid}__${bundle_name}_${algo}_${tracking_source}_cleaned.trk \
