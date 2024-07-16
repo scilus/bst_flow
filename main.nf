@@ -104,8 +104,6 @@ Channel
                     maxDepth:1)
     .map{[it.parent.name, it]}
     .tap{warp_for_reg; check_simple_warp}
-    .map{ [it[0]] }
-    .set{sid_warp_included}
 
 Channel.empty().into{check_complex_affine;check_complex_warp;check_complex_subj}
 
