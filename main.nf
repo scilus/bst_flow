@@ -98,8 +98,6 @@ Channel
                     maxDepth:1)
     .map{[it.parent.name, it]}
     .tap{affine_for_reg; check_simple_affine}
-    .map{ [it[0]] }
-    .set{sid_affine_included}
 
 Channel
     .fromPath("$root/**/*1InverseWarp.nii.gz",
